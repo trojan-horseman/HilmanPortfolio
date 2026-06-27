@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mario Platform Game - Portal Adventure</title>
+
+<style>
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+}
+
+body{
+    font-family:Arial,sans-serif;
+    background:#111;
+    color:white;
+    text-align:center;
+}
+
+h1{
+    margin-top:15px;
+}
+
+p{
+    margin:10px 0;
+}
+
+canvas{
+    display:block;
+    margin:20px auto;
+    border:3px solid black;
+    background:#87CEEB;
+}
+
+#screen{
+    position:fixed;
+    top:0;
+    left:0;
+    width:100%;
+    height:100%;
+    background:rgba(0,0,0,0.85);
+    display:none;
+    justify-content:center;
+    align-items:center;
+    flex-direction:column;
+    z-index:999;
+}
+
+#screen h1{
+    font-size:50px;
+    margin-bottom:20px;
+}
+
+#screen button{
+    padding:12px 25px;
+    font-size:18px;
+    cursor:pointer;
+    border:none;
+    border-radius:8px;
+}
+</style>
+</head>
+<body>
+
+<h1>RUN FROM LAPAYAQ</h1>
+
+<p>
+Level: <span id="level">1</span> |
+Lives: <span id="lives">3</span>
+</p>
+
+<canvas id="gameCanvas" width="800" height="400"></canvas>
+
+<div id="screen">
+    <h1 id="screenText"></h1>
+    <button onclick="restartGame()">Restart Game</button>
+</div>
+
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+
+const screen = document.getElementById("screen");
+const screenText = document.getElementById("screenText");
+
+// ================= IMAGES =================
+
+const playerImg = new Image();
+playerImg.src = "game image/players.png";
+
+const monsterImg = new Image();
+monsterImg.src = "game image/monster.png";
+
+const portalImg = new Image();
+portalImg.src = "game image/portal.png";
+
+const platformImg = new Image();
+platformImg.src = "game image/platform.png";
+
+const bg1 = new Image();
+bg1.src = "game image/bg1.png";
+
+const bg2 = new Image();
+bg2.src = "game image/bg2.png";
+
+const bg3 = new Image();
+bg3.src = "game image/bg3.png";
+
+// ================= GAME =================
+
+let level = 1;
+let lives = 3;
+let gameOver = false;
+let win = false;
+
+// ================= PLAYER =================
+
+let player = {
+    x:50,
+    y:300,
+    w:56,
+    h:56,
+    dx:0,
+    dy:0,
+    gravity:0.6,
+    jumpPower:-12,
+    onGround:false
+};
+
+// ================= LEVEL DATA =================
+
+let levels = [
+
+{
+    background:bg1,
+
+    platforms:[
+        {x:0,y:370,w:800,h:30},
+        {x:150,y:300,w:120,h:20},
+        {x:350,y:240,w:120,h:20}
+    ],
+
+    portal:{
+        x:700,
+        y:302,
+        w:50,
+        h:68
+    },
+
+    monster:{
+        x:550,
+        y:303,
+        speed:4
+    }
+},
+
+{
+    background:bg2,
+
+    platforms:[
+        {x:0,y:370,w:800,h:30},
+        {x:100,y:300,w:120,h:20},
+        {x:300,y:240,w:120,h:20},
+        {x:550,y:180,w:120,h:20}
+    ],
+
+    portal:{
+        x:620,
+        y:112,
+        w:50,
+        h:68
+    },
+
+    monster:{
+        x:500,
+        y:303,
+        speed:8
+    }
+},
+
+{
+    background:bg3,
+
+    platforms:[
+        {x:0,y:370,w:800,h:30},
+        {x:180,y:310,w:120,h:20},
+        {x:380,y:240,w:120,h:20},
+        {x:600,y:170,w:120,h:20}
+    ],
+
+    portal:{
+        x:650,
+        y:102,
+        w:50,
+        h:68
+    },
+
+    monster:{
+        x:300,
+        y:303,
+        speed:12
+    }
+}
+
+];
+
+let current = levels[0];
+
+// ================= MONSTER =================
+
+let monster = {
+    x:current.monster.x,
+    y:current.monster.y,
+    w:70,
+    h:70,
+    speed:current.monster.speed
+};
+
+// ================= INPUT =================
+
+document.addEventListener("keydown",(e)=>{
+
+    if(gameOver || win) return;
+
+    if(e.code === "ArrowRight"){
+        player.dx = 5;
+    }
+
+    if(e.code === "ArrowLeft"){
+        player.dx = -5;
+    }
+
+    if(e.code === "Space" && player.onGround){
+        player.dy = player.jumpPower;
+        player.onGround = false;
+    }
+});
+
+document.addEventListener("keyup",(e)=>{
+
+    if(e.code === "ArrowLeft" || e.code === "ArrowRight"){
+        player.dx = 0;
+    }
+});
+
+// ================= COLLISION =================
+
+function collide(a,b){
+
+    return (
+        a.x < b.x + b.w &&
+        a.x + a.w > b.x &&
+        a.y < b.y + b.h &&
+        a.y + a.h > b.y
+    );
+}
+
+// ================= LEVEL LOAD =================
+
+function loadLevel(lv){
+
+    current = levels[lv-1];
+
+    monster.x = current.monster.x;
+    monster.y = current.monster.y;
+    monster.speed = current.monster.speed;
+
+    player.x = 50;
+    player.y = 300;
+    player.dy = 0;
+}
+
+// ================= GAME SCREEN =================
+
+function showScreen(text){
+
+    screen.style.display = "flex";
+    screenText.innerText = text;
+}
+
+// ================= UPDATE =================
+
+function update(){
+
+    if(gameOver || win) return;
+
+    // PLAYER MOVEMENT
+
+    player.x += player.dx;
+
+    player.dy += player.gravity;
+    player.y += player.dy;
+
+    player.onGround = false;
+
+    // SCREEN LIMIT
+
+    if(player.x < 0){
+        player.x = 0;
+    }
+
+    if(player.x + player.w > canvas.width){
+        player.x = canvas.width - player.w;
+    }
+
+    // PLATFORM COLLISION
+
+    current.platforms.forEach(platform=>{
+
+        if(collide(player,platform)){
+
+            if(player.dy > 0){
+
+                player.y = platform.y - player.h;
+                player.dy = 0;
+                player.onGround = true;
+            }
+        }
+    });
+
+    // FALL OFF MAP
+
+    if(player.y > canvas.height + 50){
+
+        lives--;
+
+        document.getElementById("lives").innerText = lives;
+
+        player.x = 50;
+        player.y = 300;
+
+        if(lives <= 0){
+
+            gameOver = true;
+            showScreen("YOU LOSE");
+        }
+    }
+
+    // MONSTER MOVEMENT
+
+    monster.x += monster.speed;
+
+    if(monster.x > 730 || monster.x < 0){
+        monster.speed *= -1;
+    }
+
+    // MONSTER HIT
+
+    if(collide(player,monster)){
+
+        lives--;
+
+        document.getElementById("lives").innerText = lives;
+
+        player.x = 50;
+        player.y = 300;
+
+        if(lives <= 0){
+
+            gameOver = true;
+            showScreen("YOU LOSE");
+        }
+    }
+
+    // PORTAL
+
+    if(collide(player,current.portal)){
+
+        if(level < 3){
+
+            level++;
+
+            document.getElementById("level").innerText = level;
+
+            loadLevel(level);
+
+        }else{
+
+            win = true;
+            showScreen("YOU WIN !");
+        }
+    }
+}
+
+// ================= DRAW =================
+
+function draw(){
+
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+
+    // BACKGROUND
+
+    ctx.drawImage(
+        current.background,
+        0,
+        0,
+        canvas.width,
+        canvas.height
+    );
+
+    // PLATFORMS
+
+    current.platforms.forEach(platform=>{
+
+        ctx.drawImage(
+            platformImg,
+            platform.x,
+            platform.y,
+            platform.w,
+            platform.h
+        );
+    });
+
+    // PORTAL GLOW
+
+    ctx.shadowColor = "#8a2be2";
+    ctx.shadowBlur = 20;
+
+    ctx.drawImage(
+        portalImg,
+        current.portal.x,
+        current.portal.y,
+        current.portal.w,
+        current.portal.h
+    );
+
+    ctx.shadowBlur = 0;
+
+    // MONSTER
+
+    ctx.drawImage(
+        monsterImg,
+        monster.x,
+        monster.y,
+        monster.w,
+        monster.h
+    );
+
+    // PLAYER
+
+    ctx.drawImage(
+        playerImg,
+        player.x,
+        player.y,
+        player.w,
+        player.h
+    );
+}
+
+// ================= GAME LOOP =================
+
+function gameLoop(){
+
+    update();
+    draw();
+
+    requestAnimationFrame(gameLoop);
+}
+
+gameLoop();
+
+// ================= RESTART =================
+
+function restartGame(){
+    location.reload();
+}
+</script>
+
+</body>
+</html>
